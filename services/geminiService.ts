@@ -1,15 +1,10 @@
-
 import { GoogleGenAI, Chat, Type, Schema, Content } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from "../constants";
 import { LessonResponse, UserProfile } from "../types";
 
-const apiKey = process.env.API_KEY;
-
-if (!apiKey) {
-  console.error("API_KEY is missing in environment variables.");
-}
-
-const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy-key' });
+// Initialize GenAI with the API key from process.env.
+// The guideline states: "The API key must be obtained exclusively from the environment variable process.env.API_KEY."
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // Schema for structured JSON output
 const responseSchema: Schema = {
@@ -94,8 +89,5 @@ export const submitUserAudioText = async (userText: string): Promise<LessonRespo
 // Helper to get current history for saving state
 export const getChatHistory = async (): Promise<Content[]> => {
     if (!chatSession) return [];
-    // The SDK doesn't expose a direct synchronous getter for history in the interface 
-    // but we can assume the chat object maintains it. 
-    // However, the Google GenAI SDK `Chat` object usually has a `getHistory()` method.
     return await chatSession.getHistory();
 };
