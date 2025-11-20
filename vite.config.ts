@@ -1,23 +1,23 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-import { cwd } from 'process';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Load các biến môi trường từ file .env
-  // mode: 'development' hoặc 'production'
-  const env = loadEnv(mode, cwd(), '');
+  // Load env variables based on mode. 
+  // process.cwd() requires @types/node to be installed (added in package.json)
+  // Cast process to any to avoid conflict with client-side process type definition in vite-env.d.ts
+  const env = loadEnv(mode, (process as any).cwd(), '');
 
   return {
     plugins: [react()],
-    base: './', // Quan trọng cho đường dẫn tương đối
+    base: './', 
     build: {
       outDir: 'dist',
       sourcemap: false,
       chunkSizeWarningLimit: 1600,
     },
     define: {
-      // Map biến VITE_API_KEY từ file .env vào process.env.API_KEY để code logic dùng được
+      // This replaces process.env.API_KEY in the client-side code with the actual string value at build time
       'process.env.API_KEY': JSON.stringify(env.VITE_API_KEY || env.API_KEY)
     }
   };
