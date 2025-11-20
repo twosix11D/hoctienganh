@@ -1,0 +1,7 @@
+{
+  "name": "LingoSpeak AI",
+  "description": "A Duolingo-style English speaking practice app powered by Gemini. Features gamified lessons, pronunciation feedback, and role-playing scenarios.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
