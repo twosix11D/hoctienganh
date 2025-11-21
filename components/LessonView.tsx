@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { UserProfile, Unit, LessonResponse, SavedLessonState, ChatEntry, VoiceGender } from '../types';
+import { UserProfile, Unit, LessonResponse, SavedLessonState, ChatEntry, VoicePersona } from '../types';
 import { startLessonSession, submitUserAudioText, getChatHistory, resumeLessonSession } from '../services/geminiService';
-import { speakText, startListening } from '../services/speechService';
+import { speakText, startListening, stopSpeaking } from '../services/speechService';
 
 interface LessonViewProps {
   user: UserProfile;
@@ -10,10 +10,13 @@ interface LessonViewProps {
   onComplete: (xp: number, hearts: number) => void;
   onExit: () => void;
   updateHearts: (n: number) => void;
-  onUpdateVoice: (gender: VoiceGender) => void;
+  onUpdatePersona: (persona: VoicePersona) => void;
+  onToggleMute: () => void;
 }
 
-export const LessonView: React.FC<LessonViewProps> = ({ user, unit, onComplete, onExit, updateHearts, onUpdateVoice }) => {
+export const LessonView: React.FC<LessonViewProps> = ({ 
+    user, unit, onComplete, onExit, updateHearts, onUpdatePersona, onToggleMute 
+}) => {
   const [loading, setLoading] = useState(true);
   const [listening, setListening] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -32,6 +35,13 @@ export const LessonView: React.FC<LessonViewProps> = ({ user, unit, onComplete, 
   const [savedState, setSavedState] = useState<SavedLessonState | null>(null);
 
   const hasInitialized = useRef(false);
+
+  // Stop speaking immediately if user mutes
+  useEffect(() => {
+      if (user.isMuted) {
+          stopSpeaking();
+      }
+  }, [user.isMuted]);
 
   // Auto-scroll to bottom when chat changes
   useEffect(() => {
@@ -90,8 +100,8 @@ export const LessonView: React.FC<LessonViewProps> = ({ user, unit, onComplete, 
         
         saveProgress([initialEntry], 0, 0, user.hearts);
 
-        if(data.voice_script) {
-            setTimeout(() => speakText(data.voice_script, undefined, user.voiceGender), 500);
+        if(data.voice_script && !user.isMuted) {
+            setTimeout(() => speakText(data.voice_script, undefined, user.voicePersona), 500);
         }
       } catch (e) {
         console.error(e);
@@ -139,6 +149,9 @@ export const LessonView: React.FC<LessonViewProps> = ({ user, unit, onComplete, 
 
   const handleMicrophoneClick = () => {
     if (listening || processing) return;
+
+    // Stop any AI speech when user touches mic
+    stopSpeaking();
 
     setListening(true);
     setErrorMessage('');
@@ -207,6 +220,7 @@ export const LessonView: React.FC<LessonViewProps> = ({ user, unit, onComplete, 
           role: 'model',
           text: combinedText,
           correction: response.correction,
+          pronunciation_analysis: response.pronunciation_analysis, // Capture Pronunciation Feedback
           audioScript: response.voice_script
       };
 
@@ -221,8 +235,8 @@ export const LessonView: React.FC<LessonViewProps> = ({ user, unit, onComplete, 
       
       saveProgress(finalEntries, newProgress, newXP, user.hearts);
 
-      if (response.voice_script) {
-          speakText(response.voice_script, undefined, user.voiceGender);
+      if (response.voice_script && !user.isMuted) {
+          speakText(response.voice_script, undefined, user.voicePersona);
       }
 
     } catch (e) {
@@ -233,11 +247,13 @@ export const LessonView: React.FC<LessonViewProps> = ({ user, unit, onComplete, 
     }
   };
 
-  const changeVoice = (gender: VoiceGender) => {
-      onUpdateVoice(gender);
+  const changePersona = (persona: VoicePersona) => {
+      onUpdatePersona(persona);
       setShowSettings(false);
-      // Test the voice immediately
-      speakText(`Okay, I will use this ${gender} voice from now on.`, undefined, gender);
+      // Test the voice immediately if unmuted
+      if (!user.isMuted) {
+        speakText(`Okay, using this voice now.`, undefined, persona);
+      }
   };
 
   // --- RENDER ---
@@ -275,33 +291,56 @@ export const LessonView: React.FC<LessonViewProps> = ({ user, unit, onComplete, 
         <button onClick={onExit} className="text-gray-400 hover:text-gray-600">
           <i className="fas fa-times text-xl"></i>
         </button>
-        <div className="flex-1 mx-4 text-center font-bold text-gray-700">
+        <div className="flex-1 mx-4 text-center font-bold text-gray-700 truncate">
             {unit.title}
         </div>
-        <div className="w-8"></div>
+        {/* Mute Toggle */}
+        <button onClick={onToggleMute} className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${user.isMuted ? 'bg-red-100 text-red-500' : 'bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-500'}`}>
+            <i className={`fas ${user.isMuted ? 'fa-volume-mute' : 'fa-volume-up'}`}></i>
+        </button>
       </div>
 
       {/* Settings Modal */}
       {showSettings && (
           <div className="absolute inset-0 z-40 flex items-end sm:items-center justify-center bg-black/20 backdrop-blur-sm p-4" onClick={() => setShowSettings(false)}>
               <div className="bg-white w-full max-w-sm rounded-2xl shadow-xl p-6 animate-pop" onClick={e => e.stopPropagation()}>
-                  <h3 className="text-lg font-bold text-gray-800 mb-4 text-center">Voice Settings</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                      <button 
-                        onClick={() => changeVoice('female')}
-                        className={`p-4 rounded-xl flex flex-col items-center space-y-2 border-2 transition-all ${user.voiceGender === 'female' ? 'border-pink-500 bg-pink-50 text-pink-600' : 'border-gray-100 bg-gray-50 text-gray-400'}`}
-                      >
-                          <i className="fas fa-female text-2xl"></i>
-                          <span className="font-bold">Female</span>
-                      </button>
-                      <button 
-                        onClick={() => changeVoice('male')}
-                        className={`p-4 rounded-xl flex flex-col items-center space-y-2 border-2 transition-all ${user.voiceGender === 'male' ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-100 bg-gray-50 text-gray-400'}`}
-                      >
-                          <i className="fas fa-male text-2xl"></i>
-                          <span className="font-bold">Male</span>
-                      </button>
+                  <h3 className="text-lg font-bold text-gray-800 mb-4 text-center">Choose Voice</h3>
+                  
+                  {/* Grid 2 rows x 3 cols */}
+                  <div className="space-y-4">
+                      {/* Female Row */}
+                      <div className="grid grid-cols-3 gap-2">
+                         <VoiceOption 
+                            icon="fa-baby" label="Girl" active={user.voicePersona === 'female_child'} 
+                            color="text-pink-400" onClick={() => changePersona('female_child')} 
+                         />
+                         <VoiceOption 
+                            icon="fa-user" label="Woman" active={user.voicePersona === 'female_adult'} 
+                            color="text-pink-600" onClick={() => changePersona('female_adult')} 
+                         />
+                         <VoiceOption 
+                            icon="fa-user-nurse" label="Grandma" active={user.voicePersona === 'female_elderly'} 
+                            color="text-purple-600" onClick={() => changePersona('female_elderly')} 
+                         />
+                      </div>
+
+                      {/* Male Row */}
+                      <div className="grid grid-cols-3 gap-2">
+                         <VoiceOption 
+                            icon="fa-baby" label="Boy" active={user.voicePersona === 'male_child'} 
+                            color="text-blue-400" onClick={() => changePersona('male_child')} 
+                         />
+                         <VoiceOption 
+                            icon="fa-user" label="Man" active={user.voicePersona === 'male_adult'} 
+                            color="text-blue-600" onClick={() => changePersona('male_adult')} 
+                         />
+                         <VoiceOption 
+                            icon="fa-user-tie" label="Grandpa" active={user.voicePersona === 'male_elderly'} 
+                            color="text-indigo-600" onClick={() => changePersona('male_elderly')} 
+                         />
+                      </div>
                   </div>
+
                   <button 
                     onClick={() => setShowSettings(false)}
                     className="w-full mt-6 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl"
@@ -338,24 +377,35 @@ export const LessonView: React.FC<LessonViewProps> = ({ user, unit, onComplete, 
                         />
                     </div>
 
-                    {/* Bubble */}
-                    <div className={`flex flex-col p-3 rounded-2xl shadow-sm text-sm leading-relaxed relative group
-                        ${entry.role === 'user' 
-                            ? 'bg-green-500 text-white rounded-br-none' 
-                            : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none'
-                        }`}>
-                        
-                        {/* Text */}
-                        <span>{entry.text}</span>
+                    {/* Bubble Container */}
+                    <div className="flex flex-col">
+                         {/* The Bubble */}
+                        <div className={`flex flex-col p-3 rounded-2xl shadow-sm text-sm leading-relaxed relative group
+                            ${entry.role === 'user' 
+                                ? 'bg-green-500 text-white rounded-br-none' 
+                                : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none'
+                            }`}>
+                            
+                            {/* Text */}
+                            <span>{entry.text}</span>
 
-                        {/* Audio Replay Button */}
-                        {entry.role === 'model' && entry.audioScript && (
-                            <button 
-                                onClick={() => speakText(entry.audioScript!, undefined, user.voiceGender)}
-                                className="absolute -right-8 top-2 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
-                            >
-                                <i className="fas fa-volume-up text-xs"></i>
-                            </button>
+                            {/* Audio Replay Button (Only model) */}
+                            {entry.role === 'model' && entry.audioScript && (
+                                <button 
+                                    onClick={() => speakText(entry.audioScript!, undefined, user.voicePersona)}
+                                    className="absolute -right-8 top-2 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center text-gray-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                                >
+                                    <i className="fas fa-volume-up text-xs"></i>
+                                </button>
+                            )}
+                        </div>
+                        
+                        {/* Pronunciation Feedback (Displayed below Model response) */}
+                        {entry.role === 'model' && entry.pronunciation_analysis && (
+                             <div className="mt-2 ml-1 bg-yellow-50 border border-yellow-100 p-2 rounded-xl rounded-tl-none text-xs text-yellow-800 flex items-start gap-2 max-w-xs animate-pop">
+                                 <i className="fas fa-exclamation-circle mt-0.5 text-yellow-600"></i>
+                                 <span>{entry.pronunciation_analysis}</span>
+                             </div>
                         )}
                     </div>
                 </div>
@@ -415,3 +465,14 @@ export const LessonView: React.FC<LessonViewProps> = ({ user, unit, onComplete, 
     </div>
   );
 };
+
+// Helper component for Voice Option
+const VoiceOption: React.FC<{icon: string, label: string, active: boolean, color: string, onClick: () => void}> = ({icon, label, active, color, onClick}) => (
+    <button 
+        onClick={onClick}
+        className={`p-2 rounded-lg flex flex-col items-center border transition-all ${active ? `border-current bg-gray-50 ${color}` : 'border-gray-100 hover:bg-gray-50 text-gray-400'}`}
+    >
+        <i className={`fas ${icon} text-xl mb-1`}></i>
+        <span className="text-xs font-bold">{label}</span>
+    </button>
+)

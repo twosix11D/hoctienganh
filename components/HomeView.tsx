@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { UserProfile, Unit, AppView } from '../types';
 
@@ -45,9 +46,9 @@ export const HomeView: React.FC<HomeViewProps> = ({ user, units, onStartLesson, 
       </main>
 
       {/* Bottom Nav */}
-      <nav className="flex justify-around items-center p-4 border-t border-gray-200 bg-white fixed bottom-0 w-full max-w-md z-30">
+      <nav className="flex justify-around items-center p-4 border-t border-gray-200 bg-white flex-none z-30">
         <NavButton icon="fa-home" active onClick={() => onNavigate('home')} />
-        <NavButton icon="fa-dumbbell" onClick={() => {}} />
+        <NavButton icon="fa-dumbbell" onClick={() => onNavigate('exercise')} />
         <NavButton icon="fa-chart-bar" onClick={() => {}} />
         <NavButton icon="fa-user" onClick={() => onNavigate('profile')} />
       </nav>

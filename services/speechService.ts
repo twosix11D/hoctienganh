@@ -1,6 +1,6 @@
 
 // Speech Synthesis (TTS)
-import { VoiceGender } from "../types";
+import { VoiceGender, VoicePersona } from "../types";
 
 // Global counter to track the current speech session.
 // Whenever we start speaking a new phrase, we increment this.
@@ -15,7 +15,7 @@ export const stopSpeaking = () => {
     currentSpeechId++;
 };
 
-export const speakText = (text: string, onEnd?: () => void, gender: VoiceGender = 'female') => {
+export const speakText = (text: string, onEnd?: () => void, voice: VoicePersona | VoiceGender = 'female_adult') => {
     if (!window.speechSynthesis) {
       console.error("Speech synthesis not supported");
       if (onEnd) onEnd();
@@ -52,32 +52,73 @@ export const speakText = (text: string, onEnd?: () => void, gender: VoiceGender 
         }
 
         const utterance = new SpeechSynthesisUtterance(chunkText);
-        utterance.lang = 'en-US';
-        utterance.rate = 0.9; // Slightly slower for learners
-        // Adjust pitch based on gender
-        utterance.pitch = gender === 'female' ? 1.1 : 0.85; 
+        utterance.lang = 'en-US'; // Default fallback
+        
+        // TWEAK: Slightly slower rate sounds more "thoughtful" and less robotic
+        // A rate of 0.85 is easier for learners to digest.
+        utterance.rate = 0.85; 
+
+        // Determine characteristics based on VoicePersona or VoiceGender
+        const isFemale = voice.startsWith('female');
+        
+        let pitch = 1.0;
+        if (voice.includes('child')) {
+            pitch = 1.2; // Higher pitch for children
+        } else if (voice.includes('elderly')) {
+            pitch = 0.8; // Lower pitch for elderly
+        } else {
+            // Adult or generic
+            // Male voices often sound better slightly deeper (0.9)
+            // Female voices sound clearer slightly higher (1.05)
+            pitch = isFemale ? 1.05 : 0.9; 
+        }
+        utterance.pitch = pitch;
 
         // Voice Selection Logic
         const voices = window.speechSynthesis.getVoices();
         let preferredVoice = null;
 
-        if (gender === 'female') {
+        // STRATEGY: To sound "Like a Vietnamese person speaking English" or at least less "Hollywood Robot",
+        // we prioritize Asian-English locales (Singapore, Philippines, India) if available.
+        // These voices often have intonation patterns more familiar to Vietnamese ears.
+        const asianLocales = ['en-SG', 'en-PH', 'en-IN']; 
+
+        if (isFemale) {
             // Priority list for Female voices
-            preferredVoice = voices.find(v => v.name.includes('Google US English')) || 
-                             voices.find(v => v.name.includes('Samantha')) || 
-                             voices.find(v => v.name.includes('Zira')) ||
-                             voices.find(v => v.name.includes('Female')) ||
-                             voices.find(v => v.lang === 'en-US');
+            preferredVoice = 
+                // 1. Try to find "Natural" voices (Edge/Windows often has these)
+                voices.find(v => v.name.includes('Natural') && v.name.includes('Female')) ||
+                // 2. Try Asian English accents for familiarity
+                voices.find(v => v.lang === 'en-SG' && v.name.includes('Female')) ||
+                // 3. Specific good voices
+                voices.find(v => v.name.includes('Samantha')) || 
+                voices.find(v => v.name.includes('Google US English')) || 
+                voices.find(v => v.name.includes('Zira')) ||
+                // 4. Generic Fallback
+                voices.find(v => v.name.includes('Female')) ||
+                voices.find(v => v.lang === 'en-US');
         } else {
             // Priority list for Male voices
-            preferredVoice = voices.find(v => v.name.includes('Google UK English Male')) || 
-                             voices.find(v => v.name.includes('Daniel')) || 
-                             voices.find(v => v.name.includes('David')) ||
-                             voices.find(v => v.name.includes('Male')) ||
-                             voices.find(v => v.lang === 'en-GB'); 
+            preferredVoice = 
+                // 1. Try to find "Natural" voices
+                voices.find(v => v.name.includes('Natural') && v.name.includes('Male')) ||
+                // 2. Try Asian English accents
+                voices.find(v => v.lang === 'en-SG' && v.name.includes('Male')) ||
+                // 3. Specific good voices
+                voices.find(v => v.name.includes('Google UK English Male')) || 
+                voices.find(v => v.name.includes('Daniel')) || 
+                voices.find(v => v.name.includes('David')) ||
+                // 4. Generic Fallback
+                voices.find(v => v.name.includes('Male')) ||
+                voices.find(v => v.lang === 'en-GB'); 
         }
         
-        if (preferredVoice) utterance.voice = preferredVoice;
+        // If we found a specific Asian locale voice, ensure the utterance lang matches 
+        // so the browser doesn't try to force a US accent on it.
+        if (preferredVoice) {
+            utterance.voice = preferredVoice;
+            utterance.lang = preferredVoice.lang;
+        }
       
         utterance.onend = () => {
             // SECURITY CHECK again before proceeding

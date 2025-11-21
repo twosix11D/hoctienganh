@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { HomeView } from './components/HomeView';
 import { LessonView } from './components/LessonView';
 import { ProfileView } from './components/ProfileView';
-import { UserProfile, AppView, Unit, VoiceGender } from './types';
+import { ExerciseView } from './components/ExerciseView'; // Import new view
+import { UserProfile, AppView, Unit, VoicePersona } from './types';
 import { INITIAL_UNITS } from './constants';
 
 const App: React.FC = () => {
@@ -19,7 +20,9 @@ const App: React.FC = () => {
     hearts: 5,
     maxHearts: 5,
     gems: 450,
-    voiceGender: 'female' // Default voice gender
+    voiceGender: 'female', // Default
+    voicePersona: 'female_adult', // Default Persona
+    isMuted: false // Default Unmuted
   });
 
   const handleStartLesson = (unit: Unit) => {
@@ -51,8 +54,12 @@ const App: React.FC = () => {
     setUser(prev => ({ ...prev, name: newName }));
   };
 
-  const handleUpdateVoice = (gender: VoiceGender) => {
-    setUser(prev => ({ ...prev, voiceGender: gender }));
+  const handleUpdatePersona = (persona: VoicePersona) => {
+    setUser(prev => ({ ...prev, voicePersona: persona }));
+  };
+
+  const handleToggleMute = () => {
+      setUser(prev => ({ ...prev, isMuted: !prev.isMuted }));
   };
 
   // Regenerate hearts over time (mock)
@@ -83,7 +90,8 @@ const App: React.FC = () => {
             onComplete={handleLessonComplete}
             onExit={handleExitLesson}
             updateHearts={(newHearts) => setUser(prev => ({ ...prev, hearts: newHearts }))}
-            onUpdateVoice={handleUpdateVoice}
+            onUpdatePersona={handleUpdatePersona}
+            onToggleMute={handleToggleMute}
           />
         )}
         {currentView === 'profile' && (
@@ -92,6 +100,9 @@ const App: React.FC = () => {
             onUpdateName={handleUpdateName}
             onNavigate={handleNavigate}
           />
+        )}
+        {currentView === 'exercise' && (
+            <ExerciseView onNavigate={handleNavigate} />
         )}
       </div>
     </div>
